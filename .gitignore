@@ -11,3 +11,6 @@ AGENTS.md
 
 # macOS
 .DS_Store
+
+# codex config
+/.codex/config.toml
