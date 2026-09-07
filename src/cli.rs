@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "siftwave", version, about = "AI-driven podcast generator")]
@@ -9,5 +10,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    Serve,
+    Serve {
+        #[arg(long, value_name = "PATH")]
+        workspace: PathBuf,
+    },
 }
