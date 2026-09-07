@@ -14,4 +14,8 @@ pub enum Commands {
         #[arg(long, value_name = "PATH")]
         workspace: PathBuf,
     },
+    Init {
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+    },
 }

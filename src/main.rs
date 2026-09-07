@@ -5,12 +5,18 @@ use crate::cli::{Cli, Commands};
 use crate::mcp_service::McpService;
 use clap::Parser;
 use rmcp::{ServiceExt, transport::stdio};
+use std::fs;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Init { path } => {
+            fs::create_dir_all(&path)?;
+            fs::create_dir_all(path.join("data"))?;
+            fs::create_dir_all(path.join("episodes"))?;
+        }
         Commands::Serve { workspace } => {
             let workspace = workspace.canonicalize()?;
 
