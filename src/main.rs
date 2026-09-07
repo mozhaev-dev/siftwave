@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
-            let service = McpService;
+            let service = McpService::new(workspace);
             let running_service = service.serve(stdio()).await?;
             running_service.waiting().await?;
         }
