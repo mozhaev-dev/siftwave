@@ -14,3 +14,6 @@ AGENTS.md
 
 # codex config
 /.codex/config.toml
+
+# local dev workspace
+/.local/

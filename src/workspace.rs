@@ -27,12 +27,32 @@ pub fn initialize(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+pub fn validate(path: &Path) -> io::Result<()> {
+    let config_content = fs::read_to_string(path.join(CONFIG_NAME))?;
+
+    let config: WorkspaceConfig = toml::from_str(&config_content)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+
+    if config.schema_version != CURRENT_SCHEMA_VERSION {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "unsupported workspace schema version: {}",
+                config.schema_version
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::workspace::{CONFIG_NAME, CURRENT_SCHEMA_VERSION};
+    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, validate};
+    use std::{fs, io};
 
     #[test]
-    fn initialize_creates_directories_and_can_be_repeated() -> std::io::Result<()> {
+    fn initialize_creates_directories_and_can_be_repeated() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         super::initialize(&workspace)?;
@@ -42,9 +62,9 @@ mod tests {
         assert!(workspace.join("data").is_dir());
         assert!(workspace.join("episodes").is_dir());
 
-        let config_content = std::fs::read_to_string(workspace.join(CONFIG_NAME))?;
+        let config_content = fs::read_to_string(workspace.join(CONFIG_NAME))?;
         let config: super::WorkspaceConfig =
-            toml::from_str(&config_content).map_err(std::io::Error::other)?;
+            toml::from_str(&config_content).map_err(io::Error::other)?;
 
         assert_eq!(
             config,
@@ -52,6 +72,8 @@ mod tests {
                 schema_version: CURRENT_SCHEMA_VERSION
             }
         );
+
+        validate(&workspace)?;
 
         Ok(())
     }
