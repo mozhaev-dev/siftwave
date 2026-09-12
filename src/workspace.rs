@@ -48,15 +48,15 @@ pub fn validate(path: &Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, validate};
+    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, initialize, validate};
     use std::{fs, io};
 
     #[test]
     fn initialize_creates_directories_and_can_be_repeated() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
-        super::initialize(&workspace)?;
-        super::initialize(&workspace)?;
+        initialize(&workspace)?;
+        initialize(&workspace)?;
 
         assert!(workspace.is_dir());
         assert!(workspace.join("data").is_dir());
@@ -74,6 +74,32 @@ mod tests {
         );
 
         validate(&workspace)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_rejects_uninitialized_directory() -> io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let err = validate(tmp.path()).expect_err("validation should fail without a config");
+
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        Ok(())
+    }
+
+    #[test]
+    fn validate_rejects_unsupported_schema_version() -> io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let workspace = tmp.path().join("workspace");
+
+        initialize(&workspace)?;
+
+        fs::write(workspace.join(CONFIG_NAME), "schema_version = 999\n")?;
+
+        let error = validate(&workspace)
+            .expect_err("validation should reject an unsupported schema version");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
 
         Ok(())
     }
