@@ -8,6 +8,7 @@ clap = { version = "4.6.6", features = ["derive"] }
 rmcp = { version = "3.2.0", features = ["transport-io"] }
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio-rusqlite = { version = "0.8.0", features = ["bundled"] }
 toml = "1.1.5"
 
 [dev-dependencies]

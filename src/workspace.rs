@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
+use tokio_rusqlite::rusqlite::Connection;
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 const CONFIG_NAME: &str = "siftwave.toml";
+const DB_NAME: &str = "app.sqlite";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct WorkspaceConfig {
@@ -13,6 +15,9 @@ pub fn initialize(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path)?;
     fs::create_dir_all(path.join("data"))?;
     fs::create_dir_all(path.join("episodes"))?;
+
+    let db_path = path.join("data").join(DB_NAME);
+    Connection::open(&db_path).map_err(io::Error::other)?;
 
     let config_path = path.join(CONFIG_NAME);
 
@@ -48,7 +53,7 @@ pub fn validate(path: &Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, initialize, validate};
+    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, DB_NAME, initialize, validate};
     use std::{fs, io};
 
     #[test]
@@ -61,6 +66,9 @@ mod tests {
         assert!(workspace.is_dir());
         assert!(workspace.join("data").is_dir());
         assert!(workspace.join("episodes").is_dir());
+
+        let db_file = workspace.join("data").join(DB_NAME);
+        assert!(db_file.is_file());
 
         let config_content = fs::read_to_string(workspace.join(CONFIG_NAME))?;
         let config: super::WorkspaceConfig =
