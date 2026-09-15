@@ -33,6 +33,14 @@ pub fn initialize(path: &Path) -> io::Result<()> {
 }
 
 pub fn validate(path: &Path) -> io::Result<()> {
+    let db_path = path.join("data").join(DB_NAME);
+    if !db_path.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "SQLite file not found",
+        ));
+    }
+
     let config_content = fs::read_to_string(path.join(CONFIG_NAME))?;
 
     let config: WorkspaceConfig = toml::from_str(&config_content)
@@ -108,6 +116,18 @@ mod tests {
             .expect_err("validation should reject an unsupported schema version");
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_rejects_no_sqlite_file() -> io::Result<()> {
+        let tmp = tempfile::tempdir()?;
+        let workspace = tmp.path().join("workspace");
+
+        initialize(&workspace)?;
+        fs::remove_file(workspace.join("data").join(DB_NAME))?;
+        validate(&workspace).expect_err("validation should reject deleted SQLite file");
 
         Ok(())
     }
