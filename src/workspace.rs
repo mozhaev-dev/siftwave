@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
-use tokio_rusqlite::rusqlite::Connection;
+use tokio_rusqlite::rusqlite::{Connection, Error as SQLiteErr};
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 const CONFIG_NAME: &str = "siftwave.toml";
@@ -16,8 +16,7 @@ pub fn initialize(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path.join("data"))?;
     fs::create_dir_all(path.join("episodes"))?;
 
-    let db_path = path.join("data").join(DB_NAME);
-    Connection::open(&db_path).map_err(io::Error::other)?;
+    initialize_db(path).map_err(io::Error::other)?;
 
     let config_path = path.join(CONFIG_NAME);
 
@@ -59,10 +58,27 @@ pub fn validate(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn initialize_db(path: &Path) -> Result<(), SQLiteErr> {
+    let db_path = path.join("data").join(DB_NAME);
+    let connection = Connection::open(&db_path)?;
+
+    let init_sql = "
+        CREATE TABLE IF NOT EXISTS topics (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL DEFAULT ''
+        ) STRICT;
+    ";
+
+    connection.execute_batch(init_sql)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, DB_NAME, initialize, validate};
     use std::{fs, io};
+    use tokio_rusqlite::rusqlite::Connection;
 
     #[test]
     fn initialize_creates_directories_and_can_be_repeated() -> io::Result<()> {
@@ -75,8 +91,20 @@ mod tests {
         assert!(workspace.join("data").is_dir());
         assert!(workspace.join("episodes").is_dir());
 
-        let db_file = workspace.join("data").join(DB_NAME);
-        assert!(db_file.is_file());
+        let db_path = workspace.join("data").join(DB_NAME);
+        assert!(db_path.is_file());
+
+        let connection = Connection::open(db_path).map_err(io::Error::other)?;
+        let sql = "
+            SELECT count(*) FROM sqlite_schema
+            WHERE type = 'table' AND name = 'topics';
+        ";
+
+        let res: i64 = connection
+            .query_row(sql, [], |row| row.get(0))
+            .map_err(io::Error::other)?;
+
+        assert_eq!(res, 1);
 
         let config_content = fs::read_to_string(workspace.join(CONFIG_NAME))?;
         let config: super::WorkspaceConfig =
