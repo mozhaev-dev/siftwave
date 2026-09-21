@@ -1,17 +1,8 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
 
-const DATABASE_FILE_NAME: &str = "app.sqlite";
-
-pub fn database_path(workspace: &Path) -> PathBuf {
-    workspace.join("data").join(DATABASE_FILE_NAME)
-}
-
-pub fn initialize(workspace: &Path) -> Result<(), SqliteError> {
-    let connection = Connection::open(database_path(workspace))?;
+pub fn initialize(database_path: &Path) -> Result<(), SqliteError> {
+    let connection = Connection::open(database_path)?;
 
     let init_sql = "
         CREATE TABLE IF NOT EXISTS topics (
@@ -25,8 +16,8 @@ pub fn initialize(workspace: &Path) -> Result<(), SqliteError> {
     Ok(())
 }
 
-pub fn validate(workspace: &Path) -> io::Result<()> {
-    if !database_path(workspace).is_file() {
+pub fn validate(database_path: &Path) -> io::Result<()> {
+    if !database_path.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             "SQLite file not found",
@@ -38,23 +29,21 @@ pub fn validate(workspace: &Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{database_path, initialize, validate};
+    use super::{initialize, validate};
     use std::{fs, io};
     use tokio_rusqlite::rusqlite::Connection;
 
     #[test]
     fn initialize_creates_database_and_schema_and_can_be_repeated() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
-        let workspace = temp.path().join("workspace");
-        fs::create_dir_all(workspace.join("data"))?;
+        let database_path = temp.path().join("app.sqlite");
 
-        initialize(&workspace).map_err(io::Error::other)?;
-        initialize(&workspace).map_err(io::Error::other)?;
+        initialize(&database_path).map_err(io::Error::other)?;
+        initialize(&database_path).map_err(io::Error::other)?;
 
-        let db_path = database_path(&workspace);
-        assert!(db_path.is_file());
+        assert!(database_path.is_file());
 
-        let connection = Connection::open(db_path).map_err(io::Error::other)?;
+        let connection = Connection::open(database_path).map_err(io::Error::other)?;
         let table_count: i64 = connection
             .query_row(
                 "SELECT count(*) FROM sqlite_schema
@@ -72,14 +61,13 @@ mod tests {
     #[test]
     fn validate_rejects_missing_database_file() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
-        let workspace = temp.path().join("workspace");
-        fs::create_dir_all(workspace.join("data"))?;
+        let database_path = temp.path().join("app.sqlite");
 
-        initialize(&workspace).map_err(io::Error::other)?;
-        fs::remove_file(database_path(&workspace))?;
+        initialize(&database_path).map_err(io::Error::other)?;
+        fs::remove_file(&database_path)?;
 
         let error =
-            validate(&workspace).expect_err("validation should reject a missing SQLite file");
+            validate(&database_path).expect_err("validation should reject a missing SQLite file");
 
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
 
