@@ -1,10 +1,9 @@
+use crate::storage;
 use serde::{Deserialize, Serialize};
 use std::{fs, io, path::Path};
-use tokio_rusqlite::rusqlite::{Connection, Error as SQLiteErr};
 
 const CURRENT_SCHEMA_VERSION: u32 = 1;
 const CONFIG_NAME: &str = "siftwave.toml";
-const DB_NAME: &str = "app.sqlite";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct WorkspaceConfig {
@@ -16,7 +15,7 @@ pub fn initialize(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path.join("data"))?;
     fs::create_dir_all(path.join("episodes"))?;
 
-    initialize_db(path).map_err(io::Error::other)?;
+    storage::initialize(path).map_err(io::Error::other)?;
 
     let config_path = path.join(CONFIG_NAME);
 
@@ -32,14 +31,6 @@ pub fn initialize(path: &Path) -> io::Result<()> {
 }
 
 pub fn validate(path: &Path) -> io::Result<()> {
-    let db_path = path.join("data").join(DB_NAME);
-    if !db_path.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "SQLite file not found",
-        ));
-    }
-
     let config_content = fs::read_to_string(path.join(CONFIG_NAME))?;
 
     let config: WorkspaceConfig = toml::from_str(&config_content)
@@ -55,30 +46,15 @@ pub fn validate(path: &Path) -> io::Result<()> {
         ));
     }
 
-    Ok(())
-}
+    storage::validate(path)?;
 
-fn initialize_db(path: &Path) -> Result<(), SQLiteErr> {
-    let db_path = path.join("data").join(DB_NAME);
-    let connection = Connection::open(&db_path)?;
-
-    let init_sql = "
-        CREATE TABLE IF NOT EXISTS topics (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            description TEXT NOT NULL DEFAULT ''
-        ) STRICT;
-    ";
-
-    connection.execute_batch(init_sql)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, DB_NAME, initialize, validate};
+    use super::{CONFIG_NAME, CURRENT_SCHEMA_VERSION, initialize, validate};
     use std::{fs, io};
-    use tokio_rusqlite::rusqlite::Connection;
 
     #[test]
     fn initialize_creates_directories_and_can_be_repeated() -> io::Result<()> {
@@ -90,21 +66,6 @@ mod tests {
         assert!(workspace.is_dir());
         assert!(workspace.join("data").is_dir());
         assert!(workspace.join("episodes").is_dir());
-
-        let db_path = workspace.join("data").join(DB_NAME);
-        assert!(db_path.is_file());
-
-        let connection = Connection::open(db_path).map_err(io::Error::other)?;
-        let sql = "
-            SELECT count(*) FROM sqlite_schema
-            WHERE type = 'table' AND name = 'topics';
-        ";
-
-        let res: i64 = connection
-            .query_row(sql, [], |row| row.get(0))
-            .map_err(io::Error::other)?;
-
-        assert_eq!(res, 1);
 
         let config_content = fs::read_to_string(workspace.join(CONFIG_NAME))?;
         let config: super::WorkspaceConfig =
@@ -144,18 +105,6 @@ mod tests {
             .expect_err("validation should reject an unsupported schema version");
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-
-        Ok(())
-    }
-
-    #[test]
-    fn validate_rejects_no_sqlite_file() -> io::Result<()> {
-        let tmp = tempfile::tempdir()?;
-        let workspace = tmp.path().join("workspace");
-
-        initialize(&workspace)?;
-        fs::remove_file(workspace.join("data").join(DB_NAME))?;
-        validate(&workspace).expect_err("validation should reject deleted SQLite file");
 
         Ok(())
     }
