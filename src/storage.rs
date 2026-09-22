@@ -27,6 +27,30 @@ pub fn validate(database_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+pub async fn open(database_path: &Path) -> Result<tokio_rusqlite::Connection, SqliteError> {
+    tokio_rusqlite::Connection::open(database_path).await
+}
+
+pub async fn create_topic(
+    database: &tokio_rusqlite::Connection,
+    name: String,
+    description: String,
+) -> Result<i64, tokio_rusqlite::Error<SqliteError>> {
+    database
+        .call(move |connection| -> Result<i64, SqliteError> {
+            connection.execute(
+                "
+                INSERT INTO topics (name, description)
+                VALUES (?1, ?2)
+            ",
+                tokio_rusqlite::rusqlite::params![name, description],
+            )?;
+
+            Ok(connection.last_insert_rowid())
+        })
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::{initialize, validate};

@@ -5,7 +5,7 @@ mod workspace;
 
 use crate::cli::{Cli, Commands};
 use crate::mcp_service::McpService;
-use crate::workspace::{initialize, validate};
+use crate::workspace::{WorkspacePaths, initialize, validate};
 use clap::Parser;
 use rmcp::{ServiceExt, transport::stdio};
 
@@ -28,7 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into());
             }
             validate(&workspace)?;
-            let service = McpService::new(workspace);
+
+            let workspace_paths = WorkspacePaths::new(&workspace);
+
+            let connection = storage::open(&workspace_paths.database).await?;
+
+            let service = McpService::new(workspace, connection);
             let running_service = service.serve(stdio()).await?;
             running_service.waiting().await?;
         }
