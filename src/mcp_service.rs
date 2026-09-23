@@ -27,17 +27,33 @@ impl McpService {
     async fn create_topic(
         &self,
         Parameters(input): Parameters<CreateTopicInput>,
-    ) -> Result<Json<CreateTopicOutput>, ErrorData> {
+    ) -> Result<Json<TopicOutput>, ErrorData> {
         let CreateTopicInput { name, description } = input;
 
-        let id = storage::create_topic(&self.database, name.clone(), description.clone())
+        let topic = storage::create_topic(&self.database, name, description)
             .await
             .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
 
-        Ok(Json(CreateTopicOutput {
-            id,
-            name,
-            description,
+        Ok(Json(TopicOutput {
+            id: topic.id,
+            name: topic.name,
+            description: topic.description,
+        }))
+    }
+
+    #[tool(description = "Return a podcast topic by id")]
+    async fn get_topic(
+        &self,
+        Parameters(input): Parameters<GetTopicInput>,
+    ) -> Result<Json<TopicOutput>, ErrorData> {
+        let topic = storage::get_topic_by_id(&self.database, input.id)
+            .await
+            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+
+        Ok(Json(TopicOutput {
+            id: topic.id,
+            name: topic.name,
+            description: topic.description,
         }))
     }
 }
@@ -57,8 +73,13 @@ struct CreateTopicInput {
     description: String,
 }
 
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+struct GetTopicInput {
+    id: i64,
+}
+
 #[derive(Debug, serde::Serialize, rmcp::schemars::JsonSchema)]
-struct CreateTopicOutput {
+struct TopicOutput {
     id: i64,
     name: String,
     description: String,

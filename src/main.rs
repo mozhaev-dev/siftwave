@@ -1,6 +1,7 @@
 mod cli;
 mod mcp_service;
 mod storage;
+mod topic;
 mod workspace;
 
 use crate::cli::{Cli, Commands};

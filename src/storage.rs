@@ -1,6 +1,8 @@
 use std::{io, path::Path};
 use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
 
+use crate::topic::Topic;
+
 pub fn initialize(database_path: &Path) -> Result<(), SqliteError> {
     let connection = Connection::open(database_path)?;
 
@@ -35,30 +37,59 @@ pub async fn create_topic(
     database: &tokio_rusqlite::Connection,
     name: String,
     description: String,
-) -> Result<i64, tokio_rusqlite::Error<SqliteError>> {
+) -> Result<Topic, tokio_rusqlite::Error<SqliteError>> {
     database
-        .call(move |connection| -> Result<i64, SqliteError> {
+        .call(move |connection| -> Result<Topic, SqliteError> {
             connection.execute(
                 "
                 INSERT INTO topics (name, description)
                 VALUES (?1, ?2)
             ",
-                tokio_rusqlite::rusqlite::params![name, description],
+                tokio_rusqlite::rusqlite::params![&name, &description],
             )?;
 
-            Ok(connection.last_insert_rowid())
+            Ok(Topic {
+                id: connection.last_insert_rowid(),
+                name,
+                description,
+            })
+        })
+        .await
+}
+
+pub async fn get_topic_by_id(
+    database: &tokio_rusqlite::Connection,
+    id: i64,
+) -> Result<Topic, tokio_rusqlite::Error<SqliteError>> {
+    database
+        .call(move |connection| -> Result<Topic, SqliteError> {
+            connection.query_row(
+                "
+                SELECT id, name, description
+                FROM topics
+                WHERE id = ?1
+                ",
+                tokio_rusqlite::rusqlite::params![id],
+                |row| {
+                    Ok(Topic {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        description: row.get(2)?,
+                    })
+                },
+            )
         })
         .await
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::storage::{create_topic, open};
+    use crate::storage::{create_topic, get_topic_by_id, open};
 
     use super::{initialize, validate};
     use std::{fs, io};
 
-    use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
+    use tokio_rusqlite::rusqlite::Connection;
     #[test]
     fn initialize_creates_database_and_schema_and_can_be_repeated() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
@@ -108,33 +139,16 @@ mod tests {
         initialize(&database_path).map_err(io::Error::other)?;
         let database = open(&database_path).await?;
 
-        let topic_name = String::from("Rust Weekly");
-        let topic_description = String::from("Weekly Rust updates");
+        let created = create_topic(
+            &database,
+            String::from("Rust Weekly"),
+            String::from("Weekly Rust updates"),
+        )
+        .await?;
 
-        let id = create_topic(&database, topic_name.clone(), topic_description.clone()).await?;
+        let stored = get_topic_by_id(&database, created.id).await?;
 
-        let (name, description) = database
-            .call(move |connection| -> Result<(String, String), SqliteError> {
-                let topic = connection.query_row(
-                    "
-                        SELECT name, desctiption FROM topics
-                        WHERE id = ?1
-                    ",
-                    tokio_rusqlite::rusqlite::params![id],
-                    |row| {
-                        let name: String = row.get(0)?;
-                        let description: String = row.get(1)?;
-
-                        Ok((name, description))
-                    },
-                )?;
-
-                Ok(topic)
-            })
-            .await?;
-
-        assert_eq!(topic_name, name);
-        assert_eq!(topic_description, description);
+        assert_eq!(stored, created);
 
         Ok(())
     }
