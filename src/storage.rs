@@ -53,10 +53,12 @@ pub async fn create_topic(
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::{create_topic, open};
+
     use super::{initialize, validate};
     use std::{fs, io};
-    use tokio_rusqlite::rusqlite::Connection;
 
+    use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
     #[test]
     fn initialize_creates_database_and_schema_and_can_be_repeated() -> io::Result<()> {
         let temp = tempfile::tempdir()?;
@@ -94,6 +96,45 @@ mod tests {
             validate(&database_path).expect_err("validation should reject a missing SQLite file");
 
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn create_topic_inserts_topic() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let database_path = temp.path().join("app.sqlite");
+
+        initialize(&database_path).map_err(io::Error::other)?;
+        let database = open(&database_path).await?;
+
+        let topic_name = String::from("Rust Weekly");
+        let topic_description = String::from("Weekly Rust updates");
+
+        let id = create_topic(&database, topic_name.clone(), topic_description.clone()).await?;
+
+        let (name, description) = database
+            .call(move |connection| -> Result<(String, String), SqliteError> {
+                let topic = connection.query_row(
+                    "
+                        SELECT name, desctiption FROM topics
+                        WHERE id = ?1
+                    ",
+                    tokio_rusqlite::rusqlite::params![id],
+                    |row| {
+                        let name: String = row.get(0)?;
+                        let description: String = row.get(1)?;
+
+                        Ok((name, description))
+                    },
+                )?;
+
+                Ok(topic)
+            })
+            .await?;
+
+        assert_eq!(topic_name, name);
+        assert_eq!(topic_description, description);
 
         Ok(())
     }
