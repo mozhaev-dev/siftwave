@@ -3,7 +3,7 @@ use tokio_rusqlite::Connection;
 
 use rmcp::{ErrorData, Json, handler::server::wrapper::Parameters, schemars, tool, tool_router};
 
-use crate::storage;
+use crate::{storage, topic::Topic};
 
 #[derive(Debug, Clone)]
 pub struct McpService {
@@ -34,11 +34,7 @@ impl McpService {
             .await
             .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
 
-        Ok(Json(TopicOutput {
-            id: topic.id,
-            name: topic.name,
-            description: topic.description,
-        }))
+        Ok(Json(topic.into()))
     }
 
     #[tool(description = "Return a podcast topic by id")]
@@ -55,6 +51,20 @@ impl McpService {
             name: topic.name,
             description: topic.description,
         }))
+    }
+
+    #[tool(description = "List podcast topics")]
+    async fn list_topics(&self) -> Result<Json<Vec<TopicOutput>>, ErrorData> {
+        let topics = storage::list_topics(&self.database)
+            .await
+            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+
+        let output = topics
+            .into_iter()
+            .map(TopicOutput::from)
+            .collect::<Vec<_>>();
+
+        Ok(Json(output))
     }
 }
 
@@ -83,4 +93,14 @@ struct TopicOutput {
     id: i64,
     name: String,
     description: String,
+}
+
+impl From<Topic> for TopicOutput {
+    fn from(value: Topic) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            description: value.description,
+        }
+    }
 }
