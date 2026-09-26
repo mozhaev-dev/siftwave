@@ -23,13 +23,13 @@ fn initialize_creates_database_and_schema_and_can_be_repeated() -> io::Result<()
     let table_count: i64 = connection
         .query_row(
             "SELECT count(*) FROM sqlite_schema
-             WHERE type = 'table' AND name = 'topics'",
+             WHERE type = 'table' AND name IN ('topics', 'episodes')",
             [],
             |row| row.get(0),
         )
         .map_err(io::Error::other)?;
 
-    assert_eq!(table_count, 1);
+    assert_eq!(table_count, 2);
 
     Ok(())
 }

@@ -12,6 +12,17 @@ pub fn initialize(database_path: &Path) -> Result<(), SqliteError> {
             name TEXT NOT NULL UNIQUE,
             description TEXT NOT NULL DEFAULT ''
         ) STRICT;
+
+        CREATE TABLE IF NOT EXISTS episodes (
+            id INTEGER PRIMARY KEY,
+            topic_id INTEGER NOT NULL,
+            topic_name TEXT NOT NULL,
+            topic_description TEXT NOT NULL,
+            current_step TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (topic_id) REFERENCES topics(id)
+        ) STRICT;
     ";
 
     connection.execute_batch(init_sql)?;
