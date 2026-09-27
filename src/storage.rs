@@ -1,7 +1,10 @@
 use std::{io, path::Path};
 use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
 
-use crate::topic::Topic;
+use crate::{
+    episode::{Episode, WorkflowStep},
+    topic::Topic,
+};
 
 pub fn initialize(database_path: &Path) -> Result<(), SqliteError> {
     let connection = Connection::open(database_path)?;
@@ -117,6 +120,53 @@ pub async fn list_topics(
                 .collect::<Result<Vec<_>, _>>()?;
 
             Ok(topics)
+        })
+        .await
+}
+
+pub async fn create_episode(
+    database: &tokio_rusqlite::Connection,
+    topic_id: i64,
+) -> Result<Episode, tokio_rusqlite::Error<SqliteError>> {
+    let current_step = WorkflowStep::FindSources;
+
+    database
+        .call(move |connection| -> Result<Episode, SqliteError> {
+            connection.query_row(
+                "
+                    INSERT INTO episodes (
+                        topic_id,
+                        topic_name,
+                        topic_description,
+                        current_step
+                    )
+                    SELECT
+                        id, name, description, ?2
+                    FROM
+                        topics
+                    WHERE
+                        id = ?1
+                    RETURNING
+                        id,
+                        topic_id,
+                        topic_name,
+                        topic_description,
+                        version,
+                        created_at
+                ",
+                tokio_rusqlite::rusqlite::params![topic_id, current_step.as_str()],
+                |row| {
+                    Ok(Episode {
+                        id: row.get(0)?,
+                        topic_id: row.get(1)?,
+                        topic_name: row.get(2)?,
+                        topic_description: row.get(3)?,
+                        current_step,
+                        version: row.get(4)?,
+                        created_at: row.get(5)?,
+                    })
+                },
+            )
         })
         .await
 }

@@ -1,4 +1,8 @@
-use super::{create_topic, get_topic_by_id, initialize, list_topics, open, validate};
+use crate::episode::WorkflowStep;
+
+use super::{
+    create_episode, create_topic, get_topic_by_id, initialize, list_topics, open, validate,
+};
 use std::{fs, io, path::PathBuf};
 use tempfile::TempDir;
 use tokio_rusqlite::rusqlite::Connection;
@@ -88,6 +92,30 @@ async fn list_topics_returns_topics_in_creation_order() -> Result<(), Box<dyn st
 
     let topics = list_topics(&database).await?;
     assert_eq!(topics, vec![first_topic, second_topic]);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn create_episode_copies_topic_snapshot() -> Result<(), Box<dyn std::error::Error>> {
+    let (database_path, _temp) = initialize_test_db()?;
+    let database = open(&database_path).await?;
+
+    let topic = create_topic(
+        &database,
+        String::from("Rust Weekly"),
+        String::from("Weekly Rust updates"),
+    )
+    .await?;
+
+    let episode = create_episode(&database, topic.id).await?;
+
+    assert_eq!(episode.topic_id, topic.id);
+    assert_eq!(episode.topic_name, topic.name);
+    assert_eq!(episode.topic_description, topic.description);
+    assert_eq!(episode.current_step, WorkflowStep::FindSources);
+    assert_eq!(episode.version, 1);
+    assert!(!episode.created_at.is_empty());
 
     Ok(())
 }
