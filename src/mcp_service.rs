@@ -3,7 +3,7 @@ use tokio_rusqlite::Connection;
 
 use rmcp::{ErrorData, Json, handler::server::wrapper::Parameters, schemars, tool, tool_router};
 
-use crate::{storage, topic::Topic};
+use crate::{episode::Episode, storage, topic::Topic};
 
 #[derive(Debug, Clone)]
 pub struct McpService {
@@ -66,6 +66,20 @@ impl McpService {
 
         Ok(Json(output))
     }
+
+    #[tool(description = "Create a podcast episode")]
+    async fn create_episode(
+        &self,
+        Parameters(input): Parameters<CreateEpisodeInput>,
+    ) -> Result<Json<EpisodeOutput>, ErrorData> {
+        let CreateEpisodeInput { topic_id } = input;
+
+        let episode = storage::create_episode(&self.database, topic_id)
+            .await
+            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+
+        Ok(Json(episode.into()))
+    }
 }
 
 impl McpService {
@@ -101,6 +115,36 @@ impl From<Topic> for TopicOutput {
             id: value.id,
             name: value.name,
             description: value.description,
+        }
+    }
+}
+
+#[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
+struct CreateEpisodeInput {
+    topic_id: i64,
+}
+
+#[derive(Debug, serde::Serialize, rmcp::schemars::JsonSchema)]
+struct EpisodeOutput {
+    pub id: i64,
+    pub topic_id: i64,
+    pub topic_name: String,
+    pub topic_description: String,
+    pub current_step: String,
+    pub version: i64,
+    pub created_at: String,
+}
+
+impl From<Episode> for EpisodeOutput {
+    fn from(value: Episode) -> Self {
+        Self {
+            id: value.id,
+            topic_id: value.topic_id,
+            topic_name: value.topic_name,
+            topic_description: value.topic_description,
+            current_step: value.current_step.as_str().to_owned(),
+            version: value.version,
+            created_at: value.created_at,
         }
     }
 }
