@@ -1,34 +1,68 @@
 use std::{io, path::Path};
-use tokio_rusqlite::rusqlite::{Connection, Error as SqliteError};
+use tokio_rusqlite::{
+    Transaction,
+    rusqlite::{Connection, Error as SqliteError},
+};
 
 use crate::{
     episode::{Episode, WorkflowStep},
     topic::Topic,
 };
 
+const CURRENT_DATABASE_SCHEMA_VERSION: i64 = 2;
+
+// naive migrations
 pub fn initialize(database_path: &Path) -> Result<(), SqliteError> {
-    let connection = Connection::open(database_path)?;
+    let mut connection = Connection::open(database_path)?;
 
-    let init_sql = "
-        CREATE TABLE IF NOT EXISTS topics (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            description TEXT NOT NULL DEFAULT ''
-        ) STRICT;
+    let migrations: Vec<fn(&Transaction) -> Result<(), SqliteError>> = vec![
+        |t| {
+            let sql = "
+                CREATE TABLE IF NOT EXISTS topics (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT NOT NULL DEFAULT ''
+                ) STRICT;
+            ";
+            t.execute(sql, [])?;
+            Ok(())
+        },
+        |t| {
+            let sql = "
+                CREATE TABLE IF NOT EXISTS episodes (
+                id INTEGER PRIMARY KEY,
+                topic_id INTEGER NOT NULL,
+                topic_name TEXT NOT NULL,
+                topic_description TEXT NOT NULL,
+                current_step TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (topic_id) REFERENCES topics(id)
+            ) STRICT;
+            ";
+            t.execute(sql, [])?;
+            Ok(())
+        },
+    ];
 
-        CREATE TABLE IF NOT EXISTS episodes (
-            id INTEGER PRIMARY KEY,
-            topic_id INTEGER NOT NULL,
-            topic_name TEXT NOT NULL,
-            topic_description TEXT NOT NULL,
-            current_step TEXT NOT NULL,
-            version INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (topic_id) REFERENCES topics(id)
-        ) STRICT;
-    ";
+    let transaction = connection.transaction()?;
+    let current_version: i32 =
+        transaction.query_row("PRAGMA user_version", [], |row| row.get(0))?;
 
-    connection.execute_batch(init_sql)?;
+    for (idx, migration) in migrations.iter().enumerate() {
+        if idx < current_version as usize {
+            continue;
+        }
+
+        migration(&transaction)?;
+    }
+
+    if current_version < CURRENT_DATABASE_SCHEMA_VERSION as i32 {
+        transaction.pragma_update(None, "user_version", CURRENT_DATABASE_SCHEMA_VERSION)?;
+    }
+
+    transaction.commit()?;
+
     Ok(())
 }
 

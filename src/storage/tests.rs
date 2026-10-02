@@ -1,4 +1,4 @@
-use crate::episode::WorkflowStep;
+use crate::{episode::WorkflowStep, topic::Topic};
 
 use super::{
     create_episode, create_topic, get_topic_by_id, initialize, list_topics, open, validate,
@@ -116,6 +116,77 @@ async fn create_episode_copies_topic_snapshot() -> Result<(), Box<dyn std::error
     assert_eq!(episode.current_step, WorkflowStep::FindSources);
     assert_eq!(episode.version, 1);
     assert!(!episode.created_at.is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn initialize_migrates_existing_topics_database() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let database_path = temp.path().join("app.sqlite");
+
+    {
+        let connection = Connection::open(&database_path)?;
+
+        connection.execute_batch(
+            "
+            CREATE TABLE topics (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT ''
+            ) STRICT;
+
+            INSERT INTO topics (name, description)
+            VALUES ('test_name', 'test_description');
+
+            PRAGMA user_version = 1;
+        ",
+        )?;
+    }
+
+    initialize(&database_path)?;
+
+    let connection = Connection::open(&database_path)?;
+
+    let user_version: i32 = connection.query_row(
+        "
+            PRAGMA user_version;
+        ",
+        [],
+        |row| row.get(0),
+    )?;
+
+    assert_eq!(user_version, 2);
+
+    let episodes_table_count: i64 = connection.query_row(
+        "
+            SELECT count(*)
+            FROM sqlite_schema
+            WHERE type = 'table' AND name = 'episodes'
+        ",
+        [],
+        |row| row.get(0),
+    )?;
+
+    assert_eq!(episodes_table_count, 1);
+
+    let topic: Topic = connection.query_row(
+        "
+            SELECT id, name, description
+            FROM topics
+        ",
+        [],
+        |row| {
+            Ok(Topic {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+            })
+        },
+    )?;
+
+    assert_eq!(topic.name, "test_name");
+    assert_eq!(topic.description, "test_description");
 
     Ok(())
 }
