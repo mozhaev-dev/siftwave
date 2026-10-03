@@ -3,7 +3,7 @@ use tokio_rusqlite::Connection;
 
 use rmcp::{ErrorData, Json, handler::server::wrapper::Parameters, schemars, tool, tool_router};
 
-use crate::{episode::Episode, storage, topic::Topic};
+use crate::{episode::Episode, episode_service, storage, topic::Topic, workspace::WorkspacePaths};
 
 #[derive(Debug, Clone)]
 pub struct McpService {
@@ -73,8 +73,9 @@ impl McpService {
         Parameters(input): Parameters<CreateEpisodeInput>,
     ) -> Result<Json<EpisodeOutput>, ErrorData> {
         let CreateEpisodeInput { topic_id } = input;
+        let workspace_paths = WorkspacePaths::new(&self.workspace);
 
-        let episode = storage::create_episode(&self.database, topic_id)
+        let episode = episode_service::create_episode(&self.database, &workspace_paths, topic_id)
             .await
             .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
 

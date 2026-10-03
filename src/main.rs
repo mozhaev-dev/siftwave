@@ -1,5 +1,6 @@
 mod cli;
 mod episode;
+mod episode_service;
 mod mcp_service;
 mod storage;
 mod topic;
