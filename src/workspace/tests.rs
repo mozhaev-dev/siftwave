@@ -55,3 +55,22 @@ fn validate_rejects_unsupported_schema_version() -> io::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn episode_dir_returns_path_under_topic_directory() -> io::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let workspace_paths = WorkspacePaths::new(&temp.path().join("workspace"));
+    let topic_id = 123;
+    let episode_id = 456;
+
+    let path = workspace_paths.episode_dir(topic_id, episode_id);
+
+    let expected = workspace_paths
+        .episodes
+        .join(topic_id.to_string())
+        .join(episode_id.to_string());
+
+    assert_eq!(path, expected);
+
+    Ok(())
+}

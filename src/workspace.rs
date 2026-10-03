@@ -43,6 +43,12 @@ impl WorkspacePaths {
 
         Ok(())
     }
+
+    pub fn episode_dir(&self, topic_id: i64, episode_id: i64) -> PathBuf {
+        self.episodes
+            .join(topic_id.to_string())
+            .join(episode_id.to_string())
+    }
 }
 
 pub fn initialize(path: &Path) -> io::Result<()> {
