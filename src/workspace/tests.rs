@@ -74,3 +74,20 @@ fn episode_dir_returns_path_under_topic_directory() -> io::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn create_episode_dir_creates_directory_and_can_be_repeated() -> io::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let workspace_paths = WorkspacePaths::new(&temp.path().join("workspace"));
+
+    let topic_id = 123;
+    let episode_id = 456;
+
+    let path_1 = workspace_paths.create_episode_dir(topic_id, episode_id)?;
+    let path_2 = workspace_paths.create_episode_dir(topic_id, episode_id)?;
+
+    assert_eq!(&path_1, &path_2);
+    assert!(path_1.is_dir());
+
+    Ok(())
+}

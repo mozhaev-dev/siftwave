@@ -49,6 +49,12 @@ impl WorkspacePaths {
             .join(topic_id.to_string())
             .join(episode_id.to_string())
     }
+
+    pub fn create_episode_dir(&self, topic_id: i64, episode_id: i64) -> io::Result<PathBuf> {
+        let path = self.episode_dir(topic_id, episode_id);
+        fs::create_dir_all(&path)?;
+        Ok(path)
+    }
 }
 
 pub fn initialize(path: &Path) -> io::Result<()> {
